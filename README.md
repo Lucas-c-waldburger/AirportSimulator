@@ -20,4 +20,3 @@ $ ./AirportSimulator
 ### Who do I talk to? ###
 
 * Pavel Tadych (pawel.tadych@lhsystems.com)
-* Marcin Fraczak (marcin.fraczak@lhsystems.com)
