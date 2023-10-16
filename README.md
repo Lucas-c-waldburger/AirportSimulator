@@ -19,4 +19,4 @@ $ ./AirportSimulator
 
 ### Who do I talk to? ###
 
-* Pavel Tadych (pawel.tadych@lhsystems.com)
+* Andrzej Ciereszko (andrzej.ciereszko@lhsystems.com)
