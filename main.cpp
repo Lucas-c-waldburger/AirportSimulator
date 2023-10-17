@@ -23,6 +23,8 @@ class Logger
     std::cout << std::endl;
   }
 
+  // calls lock_guard for each recursion
+  // prints each Arg to cout
   template<typename First, typename ...Rest>
   static void Log(First&& first, Rest&& ...rest)
   {
@@ -70,6 +72,10 @@ class Airport {
   {}
 
   /* TODO: implement :-) */
+
+//  unsigned mNumRunways;
+//  unsigned mNumParkingStands;
+
 };
 
 int main() {
@@ -77,6 +83,7 @@ int main() {
   const unsigned numberOfRunways = 5;
   const unsigned numberOfParkingStands = 10;
 
+  // Init Airport
   Airport airport{numberOfRunways, numberOfParkingStands};
 
   // Now spin a number of threads simulating some aircrafts.
@@ -85,7 +92,7 @@ int main() {
 
   for (int i = 0; i < numberOfClients; i++)
   {
-    aircrafts.push_back(make_shared<thread>([&airport, i]()
+    aircrafts.push_back(make_shared<thread>([&airport, i]() // <- here we are initilaizing a thread with a lambda "aircraftOperations" function
     {
       string id = "Aircraft " + to_string(i);
 
@@ -103,8 +110,9 @@ int main() {
         Logger::Log(id, " received a landing token.");
 
         // Wait some random time. In some cases the token will expire, that's OK.
-        this_thread::sleep_for(seconds{RandomInt(2*Airport::kTokenExpirationTimeSec)});
+        this_thread::sleep_for(seconds{RandomInt(2*Airport::kTokenExpirationTimeSec)}); // <- sleep main thread
 
+        // if (tokenNotExpired)
         /////////////////////////////////////////////////////////////////////////////////////////////////////////
         // TODO:
         // Attempt calling into Airport::PerformLanding and break out of the loop if it's successful.

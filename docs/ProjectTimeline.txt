@@ -1,0 +1,28 @@
+
+10/17
+- review asynchronous threading, mutex, thread safety
+- develop UML/ERD to inform project structure
+
+10/18
+- begin implementing request functions
+- define structure/parsing of requestTokens
+- define structures for successFlags and errorInfo
+
+10/19
+- finalize request functions
+- begin implementing perform functions
+
+10/20
+- finalize perform functions
+- bring program to minimum-functioning state
+
+10/21
+- finalize program
+
+- review gtest, thread-safe unit testing
+- create general structure for test fixtures
+- begin test implementation
+
+10/22
+- finish implementation of unit testing
+- clean-up code, review
