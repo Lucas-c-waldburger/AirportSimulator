@@ -1,11 +1,11 @@
 
 10/17
-- review asynchronous threading, mutex, thread safety
-- develop UML/ERD to inform project structure
+- review asynchronous threading, mutex, thread safety - COMPLETED
+- develop UML/ERD to inform project structure - COMPLETED
 
 10/18
-- begin implementing request functions
-- define structure/parsing of requestTokens
+- begin implementing request functions - COMPLETED
+- define structure/parsing of requestTokens - COMPLETED
 - define structures for successFlags and errorInfo
 
 10/19
