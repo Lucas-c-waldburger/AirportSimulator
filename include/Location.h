@@ -7,55 +7,88 @@
 // unfortunately. However, we are now able to encapsulate the state member var inside Location.
 // Not sure which is preferable
 
-
-template <typename StateEnum>
-struct Location
+struct Runway
 {
-    Location(const std::string& id, StateEnum st);
-    virtual ~Location() = 0;
+    enum State
+    {
+        AVAILABLE,
+        RESERVED,
+        IN_OPERATION
+    };
 
+    Runway(const std::string& id, State st);
+
+    const std::string& getID() const;
+    const State getState() const;
+    void setState(State st);
+
+private:
     std::string ID;
-    StateEnum state;
-
+    State state;
+    mutable std::mutex mLock;
 };
 
-template<typename StateEnum>
-inline Location<StateEnum>::Location(const std::string& id, StateEnum st) : ID(id), state(st)
-{}
-
-template<typename StateEnum>
-inline Location<StateEnum>::~Location()
-{}
-
-
-
-
-enum class RunwayState
+struct ParkingStand
 {
-    IN_OPERATION,
-    RESERVED,
-    AVAILABLE
+    enum State
+    {
+        AVAILABLE,
+        RESERVED,
+        OCCUPIED
+    };
+
+    ParkingStand(const std::string& id, State st);
+    const std::string& getID() const;
+    const State getState() const;
+    void setState(State st);
+
+private:
+    std::string ID;
+    State state;
+    mutable std::mutex mLock;
 };
 
-struct Runway : public Location<RunwayState>
-{
-    Runway(const std::string& id);
-    virtual ~Runway() = default;
-};
-
-
-enum class ParkingStandState
-{
-    OCCUPIED,
-    RESERVED,
-    AVAILABLE
-};
-
-struct ParkingStand : public Location<ParkingStandState>
-{
-    ParkingStand(const std::string& id);
-    virtual ~ParkingStand() = default;
-};
+//struct Location
+//{
+//    Location(const std::string& id);
+//    virtual ~Location() = 0;
+//
+//    std::string ID;
+//};
+//
+//
+//struct Runway : public Location
+//{
+//    Runway(const std::string& id);
+//    virtual ~Runway() = default;
+//
+//    enum class State
+//    {
+//        IN_OPERATION,
+//        RESERVED,
+//        AVAILABLE
+//    };
+//
+//    State state;
+//};
+//
+//
+//
+//
+//struct ParkingStand : public Location
+//{
+//    ParkingStand(const std::string& id);
+//    virtual ~ParkingStand() = default;
+//
+//    enum class State
+//    {
+//        OCCUPIED,
+//        RESERVED,
+//        AVAILABLE
+//    };
+//
+//    State state;
+//};
 
 
 #endif //AIRPORTSIMULATOR_LOCATION_H
