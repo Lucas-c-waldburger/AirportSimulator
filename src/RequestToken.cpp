@@ -1,47 +1,40 @@
 #include "../include/RequestToken.h"
 
-RequestToken::RequestToken(RequestToken::RequestType reqType, const std::string& acID, const std::string& rwID,
-const std::string& psID) : requestType(reqType), aircraftID(acID), runwayID(rwID), expirationTime(RequestToken::makeExpiration(2))
+
+RequestToken::RequestToken(RequestType reqType, const std::string& acId, const std::string& rwId, const std::string& psId, const unsigned secsTillExp) :
+        aircraftID(acId), runwayID(rwId), parkingStandID(psId), expirationTime(RequestToken::makeExpiration(secsTillExp))
 {}
 
-std::unique_ptr<RequestToken> RequestToken::buildLandingRequest(const std::string& acID,
-                                                                const std::string& rwID,
-                                                                const std::string& psID)
+
+std::unique_ptr<RequestToken> RequestToken::buildLandingRequestToken(const std::string& acId, const std::string& rwId, const std::string& psId, const unsigned secsTillExp)
 {
-    return std::unique_ptr<RequestToken>(new RequestToken(RequestType::LANDING, acID, rwID, psID));
+    return std::unique_ptr<RequestToken>(new RequestToken(RequestType::LANDING, acId, rwId, psId, secsTillExp));
 }
 
-std::unique_ptr<RequestToken> RequestToken::buildTakeOffRequest(const std::string& acID,
-                                                                const std::string& rwID)
+
+std::unique_ptr<RequestToken> RequestToken::buildTakeOffRequestToken(const std::string& acId, const std::string& rwId, const unsigned secsTillExp)
 {
-    return std::unique_ptr<RequestToken>(new RequestToken(RequestType::TAKE_OFF, acID, rwID, ""));
+    return std::unique_ptr<RequestToken>(new RequestToken(RequestType::TAKEOFF, acId, rwId, "", secsTillExp));
 }
 
-std::chrono::time_point<std::chrono::steady_clock> RequestToken::makeExpiration(int secs)
+
+const uint64_t RequestToken::makeExpiration(const unsigned secsTillExp)
 {
-    return std::chrono::steady_clock::now() + std::chrono::seconds(secs);
+    //auto now = std::chrono::steady_clock::now();
+    //auto exp = now + std::chrono::seconds(secs);
+    //Logger::Log("Given an expiration time of ", exp - now);
+
+    auto expiration = std::chrono::steady_clock::now() + std::chrono::seconds(secsTillExp);
+
+    return expiration.time_since_epoch().count();
 }
 
-bool RequestToken::reservationExpired(const RequestToken& reqToken)
+const bool RequestToken::tokenExpired(const uint64_t expirationTime)
 {
-    return std::chrono::steady_clock::now() > reqToken.expirationTime;
+
+    auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+    // Logger::Log("NOW: ", now, "   EXPIR: ", expirationTime);
+    return now >= expirationTime;
+    //return (std::chrono::duration_cast<std::chrono::seconds>(expirationTime - now).count() < 0);
 }
-
-//LandingRequestToken::LandingRequestToken(const std::string& acID, const std::string& rwID, const std::string& psID) :
-//        RequestToken(acID, rwID), parkingStandID(psID)
-//{}
-//
-//
-//std::unique_ptr<TakeOffRequestToken> TakeOffRequestToken::build(const std::string& acID,
-//                                                                const std::string& rwID)
-//{
-//    return std::unique_ptr<TakeOffRequestToken>(new TakeOffRequestToken(acID, rwID));
-//}
-//
-//TakeOffRequestToken::TakeOffRequestToken(const std::string& acID, const std::string& rwID) : RequestToken(acID, rwID)
-//{}
-
-
-
-
 

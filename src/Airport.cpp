@@ -1,157 +1,160 @@
 #include "../include/Airport.h"
 
-Airport::Airport()
+
+Airport::Airport(unsigned numberOfRunways, unsigned numberOfParkingStands) :
+        runways("RUNWAY", numberOfRunways), parkingStands("PARKING STAND", numberOfParkingStands)
+{}
+
+
+std::unique_ptr<RequestToken> Airport::requestLanding(const std::string & aircraftID)
 {
-//    for (int i = 0; i < 10; i++)
-//    {
-//        std::string id = "RUNWAY" + std::to_string(i);
-//        this->runways.emplace_back(id);
-//        id = "PARKING STAND" + std::to_string(i);
-//        this->parkingStands.emplace_back(id);
-//        //this->runways.back().state = Runway::State::AVAILABLE;
-//    }
-}
+    std::unique_ptr<RequestToken> lrt;
+    std::string reservedRunwayID, reservedParkingStandID;
 
-// Do we need to use a recursive mutex?
-// Do we need to return a pointer or just an object?
-std::unique_ptr<RequestToken> Airport::RequestLanding(const std::string& aircraftID)
-{
-    std::unique_ptr<RequestToken> lRt;
-
-    Runway* availableRunway = runways.findAvailable();
-
-    if (availableRunway)
+    for (auto& rw : runways.locations)
     {
-        ParkingStand* availableParkingStand = parkingStands.findAvailable();
-
-        if (availableParkingStand)
+        if (runways.conditionalSetState(rw.first, RunwayState::AVAILABLE, RunwayState::RESERVED))
         {
-            // reserve resources
-            availableRunway->setState(Runway::State::RESERVED);
-            availableParkingStand->setState(ParkingStand::State::RESERVED);
-
-            lRt = RequestToken::buildLandingRequest(aircraftID, availableRunway->getID(), availableParkingStand->getID());
+            reservedRunwayID = rw.first;
+            break;
         }
     }
 
-    return lRt;
+    if (!reservedRunwayID.empty()) // we know that an available runway was found and reserved
+    {
+        for (auto& ps : parkingStands.locations)
+        {
+            if (parkingStands.conditionalSetState(ps.first, ParkingStandState::AVAILABLE, ParkingStandState::RESERVED))
+            {
+                reservedParkingStandID = ps.first;
+                break;
+            }
+        }
+
+        if (!reservedParkingStandID.empty()) // both runway and parkingStand successfully reserved
+        {
+            lrt = RequestToken::buildLandingRequestToken(aircraftID, reservedRunwayID, reservedParkingStandID, kTokenExpirationTimeSec);
+        }
+
+        else // available ParkingStand not found, make the reserved runway available again
+        {
+            runways.setState(reservedRunwayID, RunwayState::AVAILABLE);
+        }
+    }
+
+    return lrt; // will either return a temporarily valid landingRequestToken, or a nullptr if resources were not available
+
 }
 
-// if (lRt)
-    // PerformLanding(lRt)
-
-Airport::SuccessFlag Airport::PerformLanding(RequestToken& lRt)
+// if perform returns nullptr, check the error code and log it
+// else join the timer thread
+std::unique_ptr<std::thread> Airport::performLanding(const RequestToken& lrt)
 {
-    // check expiration
-    if (RequestToken::reservationExpired(lRt))
+    // if (lrt.reqType != RequestToken::RequestType::LANDING)
+
+    bool freeResources = false;
+
+    if (RequestToken::tokenExpired(lrt.expirationTime))
     {
-        freeResources(lRt);
-        return SuccessFlag::EXPIRED_TOKEN;
+
+        freeResources = true;
     }
 
-    // if not expired, set runway to in_operation and start thread to make runway available and parkingStand occupied after wait time
+    else if (!runways.conditionalSetState(lrt.runwayID, RunwayState::RESERVED, RunwayState::IN_OPERATION)) // attempt to set runway to inOperation, checks if properly reserved first
+    {
+        freeResources = true;
+    }
 
-    runways[lRt.runwayID].setState(Runway::State::IN_OPERATION);
+    if (freeResources)
+    {
+        runways.setState(lrt.runwayID, RunwayState::AVAILABLE);
+        parkingStands.setState(lrt.parkingStandID, ParkingStandState::AVAILABLE);
 
-    std::thread opTime(setTimerForReactivation, std::ref(runways[lRt.runwayID]), std::ref(parkingStands[lRt.parkingStandID]));
+        return nullptr;
+    }
 
+    return std::unique_ptr<std::thread>(new std::thread(&Airport::setLandingOpTimer, this, lrt.runwayID, lrt.parkingStandID));
 
-    return SuccessFlag::SUCCESS;
 }
 
-std::unique_ptr<RequestToken> Airport::RequestTakeOff(const std::string& aircraftID)
+std::unique_ptr<RequestToken> Airport::requestTakeOff(const std::string& aircraftID)
 {
-    std::unique_ptr<RequestToken> toRt;
+    std::unique_ptr<RequestToken> tort;
+    std::string reservedRunwayID;
 
-    Runway* availableRunway = runways.findAvailable();
-
-    if (availableRunway)
+    for (auto& rw : runways.locations)
     {
-        // reserve resources
-        availableRunway->setState(Runway::State::RESERVED);
-
-        toRt = RequestToken::buildTakeOffRequest(aircraftID, availableRunway->getID());
+        if (runways.conditionalSetState(rw.first, RunwayState::AVAILABLE, RunwayState::RESERVED))
+        {
+            reservedRunwayID = rw.first;
+            break;
+        }
     }
 
-    return toRt;
+    if (!reservedRunwayID.empty()) // we know that an available runway was found and reserved
+    {
+        tort = RequestToken::buildTakeOffRequestToken(aircraftID, reservedRunwayID, kTokenExpirationTimeSec);
+        Logger::Log(aircraftID, " was given a valid takeOffToken");
+    }
+
+    return tort; // will either return a temporarily valid takeOffRequestToken, or a nullptr if runway was not available
+
 }
 
-// if (toRt)
-    // toRt->parkingStandID = lRt->parkingStandID
-    // PerformTakeOff(toRt)
-
-Airport::SuccessFlag Airport::PerformTakeOff(RequestToken& toRt)
+// at this point, runway is RESERVED
+std::unique_ptr<std::thread> Airport::performTakeOff(const RequestToken& tort)
 {
-    // make sure the parkingStandID where the aircraft is was added to requestToken
-    if (toRt.parkingStandID.empty())
+    //bool makeRunwayAvailable = false;
+    /*auto now = std::chrono::steady_clock::now();
+    Logger::Log(tort.aircraftID, " time since exp - ", (tort.expirationTime - now).count());*/
+
+    if (RequestToken::tokenExpired(tort.expirationTime))
     {
-        return SuccessFlag::MISSING_PARKING_STAND_ID;
+        Logger::Log(tort.aircraftID, " had their take off token expire");
+        runways.setState(tort.runwayID, RunwayState::AVAILABLE);
+        return nullptr;
+        //makeRunwayAvailable = true;
     }
 
-    // check expiration
-    if (RequestToken::reservationExpired(toRt))
+    // attempt to set runway to inOperation & parkingStand to Available
+    if (runways.conditionalSetState(tort.runwayID, RunwayState::RESERVED, RunwayState::IN_OPERATION))
     {
-        freeResources(toRt);
-        return SuccessFlag::EXPIRED_TOKEN;
+        Logger::Log(tort.aircraftID, " successfully changed their RESERVED runway (", tort.runwayID, ") to IN_OPERATION");
+
+        if (parkingStands.conditionalSetState(tort.parkingStandID, ParkingStandState::OCCUPIED, ParkingStandState::AVAILABLE))
+        {
+
+            return std::unique_ptr<std::thread>(new std::thread(&Airport::setTakeOffOpTimer, this, tort.runwayID));
+        }
+
+        else
+        {
+            runways.setState(tort.runwayID, RunwayState::AVAILABLE);
+            return nullptr;
+        }
+
     }
 
-    // if not expired, change states
-    runways[toRt.runwayID].setState(Runway::State::IN_OPERATION);
-    parkingStands[toRt.parkingStandID].setState(ParkingStand::State::AVAILABLE);
-
-    return SuccessFlag::SUCCESS;
+    else
+        return nullptr;
 }
 
-void Airport::setTimerForReactivation(Runway& runway, ParkingStand& parkingStand)
+
+void Airport::setLandingOpTimer(const std::string& runwayID, const std::string& parkingStandID)
 {
     std::this_thread::sleep_for(std::chrono::seconds(kOperationDurationSec));
 
-    runway.setState(Runway::State::AVAILABLE);
-    parkingStand.setState(ParkingStand::State::OCCUPIED);
+    runways.setState(runwayID, RunwayState::AVAILABLE);
+    parkingStands.setState(parkingStandID, ParkingStandState::OCCUPIED);
+    Logger::Log("Landing timer for ", runwayID, " & ", parkingStandID, " mconcluded");
+}
+
+void Airport::setTakeOffOpTimer(const std::string& runwayID)
+{
+    std::this_thread::sleep_for(std::chrono::seconds(kOperationDurationSec));
+
+    runways.setState(runwayID, RunwayState::AVAILABLE);
+    Logger::Log("Take Off timer for ", runwayID, " concluded");
 }
 
 
-//void Airport::setTimerForReactivation(Runway& runway, ParkingStand& parkingStand)
-//{
-//    std::this_thread::sleep_for(std::chrono::seconds(kOperationDurationSec));
-//
-//    std::lock_guard<std::recursive_mutex> lg(smutex);
-//
-//    runway.state = Runway::State::AVAILABLE;
-//    parkingStand.state = ParkingStand::State::OCCUPIED;
-//}
-//
-//void Airport::reserveResources(const RequestToken& reqToken)
-//{
-//    std::lock_guard<std::recursive_mutex> lg(smutex);
-//
-//    switch (reqToken.requestType)
-//    {
-//        case RequestToken::RequestType::LANDING:
-//            runways[reqToken.runwayID].state = Runway::State::RESERVED;
-//            parkingStands[reqToken.parkingStandID].state = ParkingStand::State::RESERVED;
-//            break;
-//
-//        case RequestToken::RequestType::TAKE_OFF:
-//            runways[reqToken.runwayID].state = Runway::State::RESERVED;
-//            break;
-//    }
-//}
-//
-//void Airport::freeResources(const RequestToken& reqToken)
-//{
-//    std::lock_guard<std::recursive_mutex> lg(smutex);
-//
-//    switch (reqToken.requestType)
-//    {
-//        case RequestToken::RequestType::LANDING:
-//            runways[reqToken.runwayID].state = Runway::State::AVAILABLE;
-//            parkingStands[reqToken.parkingStandID].state = ParkingStand::State::AVAILABLE;
-//            break;
-//
-//        case RequestToken::RequestType::TAKE_OFF:
-//            runways[reqToken.runwayID].state = Runway::State::AVAILABLE;
-//            break;
-//    }
-//
-//}

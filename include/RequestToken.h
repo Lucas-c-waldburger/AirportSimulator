@@ -5,66 +5,26 @@
 #include <chrono>
 #include <memory>
 
-
 class RequestToken
 {
 public:
-    enum RequestType { LANDING, TAKE_OFF };
+    enum RequestType { LANDING, TAKEOFF };
 
-    static std::unique_ptr<RequestToken> buildLandingRequest(const std::string& acID, const std::string& rwID, const std::string& psID);
-    static std::unique_ptr<RequestToken> buildTakeOffRequest(const std::string& acID, const std::string& rwID);
-    static bool reservationExpired(const RequestToken& reqToken);
-
-
-    RequestType requestType;
+    RequestType reqType;
     std::string aircraftID;
     std::string runwayID;
     std::string parkingStandID;
-    std::chrono::time_point<std::chrono::steady_clock> expirationTime;
+    const uint64_t expirationTime;
+
+    static std::unique_ptr<RequestToken> buildLandingRequestToken(const std::string& acId, const std::string& rwId, const std::string& psId, const unsigned secsTillExp);
+    static std::unique_ptr<RequestToken> buildTakeOffRequestToken(const std::string& acId, const std::string& rwId, const unsigned secsTillExp);
+
+    static const bool tokenExpired(const uint64_t expirationTime);
 
 private:
-    RequestToken(RequestType reqType, const std::string& acID, const std::string& rwID, const std::string& psID);
-    static std::chrono::time_point<std::chrono::steady_clock> makeExpiration(int secs);
+    RequestToken(RequestType reqType, const std::string& acId, const std::string& rwId, const std::string& psId, const unsigned secsTillExp);
+
+    static const uint64_t makeExpiration(const unsigned secsTillExp);
 };
-
-
-//class RequestToken
-//{
-//public:
-//    RequestToken(const std::string& acID, const std::string& rwID);
-//    virtual ~RequestToken() = 0;
-//
-//    std::string aircraftID;
-//    std::string runwayID;
-//    std::chrono::time_point<std::chrono::steady_clock> expirationTime;
-//
-//    static std::chrono::time_point<std::chrono::steady_clock> makeExpiration(int secs);
-//    static bool reservationExpired(const RequestToken& reqToken);
-//};
-//
-//class LandingRequestToken : public RequestToken
-//{
-//public:
-//    virtual ~LandingRequestToken() = default;
-//    static std::unique_ptr<LandingRequestToken> build(const std::string& acID,
-//                                                      const std::string& rwID,
-//                                                      const std::string& psID);
-//
-//    std::string parkingStandID;
-//
-//private:
-//    LandingRequestToken(const std::string& acID, const std::string& rwID, const std::string& psID);
-//
-//};
-//
-//class TakeOffRequestToken : public RequestToken
-//{
-//public:
-//    virtual ~TakeOffRequestToken() = default;
-//    static std::unique_ptr<TakeOffRequestToken> build(const std::string& acID, const std::string& rwID);
-//private:
-//    TakeOffRequestToken(const std::string& acID, const std::string& rwID);
-//};
-
 
 #endif //AIRPORTSIMULATOR_REQUESTTOKEN_H

@@ -1,49 +1,51 @@
 
 #ifndef AIRPORTSIMULATOR_AIRPORT_H
 #define AIRPORTSIMULATOR_AIRPORT_H
-#include "AircraftRequest.h"
-#include "Location.h"
-#include "LocationMap.h"
+#include "LocationManager.h"
 #include "RequestToken.h"
-#include <vector>
-#include <mutex>
 #include <thread>
+#include <memory>
+
+
+static constexpr const int kOperationDurationSec = 5;
+static constexpr const int kTokenExpirationTimeSec = 2;
+
 
 class Airport
 {
 public:
-    Airport();
 
-    static constexpr const int kOperationDurationSec = 5;
-    static constexpr const int kTokenExpirationTimeSec = 2;
 
-    enum class SuccessFlag
+    Airport(unsigned numberOfRunways, unsigned numberOfParkingStands);
+
+    enum PerformOperationFlag
     {
-        SUCCESS = 1 << 0,
-        EXPIRED_TOKEN = 1 << 1,
-        INCORRECT_TOKEN_TYPE = 1 << 2,
-        INVALID_ID = 1 << 3,
-        MISSING_RUNWAY_ID = 1 << 4,
-        MISSING_PARKING_STAND_ID = 1 << 5
+        SUCCESS,
+        EXPIRED_TOKEN,
+        STATE_CONFLICT
     };
 
-    std::unique_ptr<RequestToken> RequestLanding(const std::string& aircraftID);
-    SuccessFlag PerformLanding(RequestToken& lRt);
+    std::unique_ptr<RequestToken> requestLanding(const std::string& aircraftID);
+    std::unique_ptr<std::thread> performLanding(const RequestToken& lrt);
+    std::unique_ptr<RequestToken> requestTakeOff(const std::string& aircraftID);
+    std::unique_ptr<std::thread> performTakeOff(const RequestToken& tort);
 
-    std::unique_ptr<RequestToken> RequestTakeOff(const std::string& aircraftID);
-    SuccessFlag PerformTakeOff(RequestToken& toRt);
+    // std::mutex apMutex;
 
-    // CHANGE TO NEUTRAL TIMER
-    static void setTimerForLandingOp(Runway& runway, ParkingStand& parkingStand);
-    static void setTimerForTakeOffOp(Runway& runway, ParkingStand& parkingStand);
 
-    LocationMap<Runway> runways;
-    LocationMap<ParkingStand> parkingStands;
 
-    void reserveResources(const RequestToken& reqToken);
-    void freeResources(const RequestToken& reqToken);
+    // void makeAvailable(const std::string& runwayID, const std::string& parkingStandID);
 
+private:
+    LocationManager<Runway, RunwayState> runways;
+    LocationManager<ParkingStand, ParkingStandState> parkingStands;
+
+    //void setOpStateChangeTimer(const std::string& runwayID, RunwayState rwStateChange, const std::string& parkingStandID, ParkingStandState psStateChange);
+    void setLandingOpTimer(const std::string& runwayID, const std::string& parkingStandID);
+    void setTakeOffOpTimer(const std::string& runwayID);
 };
+
+
 
 
 

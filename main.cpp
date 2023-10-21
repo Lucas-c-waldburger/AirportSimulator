@@ -2,174 +2,135 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+#include "include/Airport.h"
 
 using namespace std;
-using namespace std::chrono;
+using namespace chrono;
 
-/**
- * @defgroup Boilerplate
- * Basic support for logging and random sleeps. Nothing exciting to see here.
- * @{ */
 
-/** Some simple thread-safe logging functionality. */
-namespace {
-
-class Logger
-{
- public:
-  static void Log()
-  {
-    lock_guard<recursive_mutex> lock(s_mutex);
-    std::cout << std::endl;
-  }
-
-  // calls lock_guard for each recursion
-  // prints each Arg to cout
-  template<typename First, typename ...Rest>
-  static void Log(First&& first, Rest&& ...rest)
-  {
-    lock_guard<recursive_mutex> lock(s_mutex);
-    std::cout << std::forward<First>(first);
-    Log(std::forward<Rest>(rest)...);
-  }
-
- private:
-  static recursive_mutex s_mutex;
-};
-
-recursive_mutex Logger::s_mutex;
-
-/** Produces a random integer within the [1..max] range. */
 int RandomInt(int maxValue = 6)
 {
   const int minValue = 1;
   return minValue + (rand() % static_cast<int>(maxValue - minValue + 1));
 }
 
-}
 
-/** @} */
+int main()
+{
+    const unsigned numberOfClients = 30;
+    const unsigned numberOfRunways = 5;
+    const unsigned numberOfParkingStands = 10;
 
-/** A runway, essential for air travel. */
-class Runway {
-  /* TODO: implement :-) */
-};
+    Airport airport{ numberOfRunways, numberOfParkingStands };
 
-/** Parking stand. Useful whether you're in a 747-800 or a station wagon. */
-class ParkingStand {
-  /* TODO: implement :-) */
-};
+    vector<shared_ptr<thread>> aircrafts;
 
-/** Simulation of an airport. Tiny preview of the headaches that come with the real thing. */
-class Airport {
- public:
-  /** Duration of an airport operation. */
-  static constexpr const int kOperationDurationSec = 5;
-  /** Validity of a token. Provided for convenience only, client should not rely on this time to assume the token is valid. */
-  static constexpr const int kTokenExpirationTimeSec = 2;
-
-  Airport(unsigned numberOfRunways, unsigned numberOfParkingStands)
-  {}
-
-  /* TODO: implement :-) */
-
-//  unsigned mNumRunways;
-//  unsigned mNumParkingStands;
-
-};
-
-int main() {
-  const unsigned numberOfClients = 30;
-  const unsigned numberOfRunways = 5;
-  const unsigned numberOfParkingStands = 10;
-
-  // Init Airport
-  Airport airport{numberOfRunways, numberOfParkingStands};
-
-  // Now spin a number of threads simulating some aircrafts.
-
-  vector<shared_ptr<thread>> aircrafts;
-
-  for (int i = 0; i < numberOfClients; i++)
-  {
-    aircrafts.push_back(make_shared<thread>([&airport, i]() // <- here we are initilaizing a thread with a lambda "aircraftOperations" function
+    for (int i = 0; i < numberOfClients; i++)
     {
-      string id = "Aircraft " + to_string(i);
-
-      bool landingSuccessful = false;
-
-      while (!landingSuccessful)
-      {
-
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////
-        // TODO:
-        // Attempt calling into Airport::RequestLanding until landing token is successfully received.
-        // Repeat otherwise.
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        Logger::Log(id, " received a landing token.");
-
-        // Wait some random time. In some cases the token will expire, that's OK.
-        this_thread::sleep_for(seconds{RandomInt(2*Airport::kTokenExpirationTimeSec)}); // <- sleep main thread
-
-        // if (tokenNotExpired)
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////
-        // TODO:
-        // Attempt calling into Airport::PerformLanding and break out of the loop if it's successful.
-        // Allow the loop to repeat otherwise.
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        if (!landingSuccessful)
+        aircrafts.push_back(make_shared<thread>([&airport, i]()
         {
-          Logger::Log(id, " landing token expired. It will try again.");
-        }
+            string id = "Aircraft " + to_string(i);
 
-      }
+            bool landingSuccessful = false;
 
-      Logger::Log(id + " has successfully landed.");
+            unique_ptr<RequestToken> landingRequestToken;
+            std::unique_ptr<std::thread> landingOpTimer;
 
-      // Sleep for at least the time of landing operation plus some random time
-      this_thread::sleep_for(seconds{seconds{Airport::kOperationDurationSec + RandomInt()}});
+            while (!landingSuccessful)
+            {
+                // AIRCRAFT IS NOT in runway and NOT in parkingStand
+                //
+                // keep requesting, once non-null pointer to request token recieved, proceed
+                do
+                {
+                    landingRequestToken = airport.requestLanding(id);
 
-      Logger::Log(id, " is attempting a take-off.");
+                } while (!landingRequestToken);
+                Logger::Log(id, " - found RW: ", landingRequestToken->runwayID, "& found parking stand: ", landingRequestToken->parkingStandID, '\n');
 
-      bool takeOffSuccessful = false;
+                Logger::Log(id, " received a landing token.");
 
-      while (!takeOffSuccessful)
-      {
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////
-        // TODO:
-        // Attempt calling into Airport::RequestTakeoff until take-off token is successfully received.
-        // Repeat otherwise.
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////
+                // Wait some random time. In some cases the token will expire, that's OK.
+                this_thread::sleep_for(seconds{ RandomInt(2 * kTokenExpirationTimeSec) });
 
-        Logger::Log(id, " received a take-off token.");
+                landingOpTimer = airport.performLanding(*landingRequestToken);
 
-        // Wait some random time. In some cases the token will expire, that's OK.
-        this_thread::sleep_for(seconds{RandomInt(2*Airport::kTokenExpirationTimeSec)});
+                if (landingOpTimer)
+                {
+                    landingSuccessful = true;
+                    break;
+                }
 
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////
-        // TODO:
-        // Attempt calling into Airport::PerformTakeoff and break out of the loop if it's successful.
-        // Allow the loop to repeat otherwise.
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////
+                if (!landingSuccessful)
+                {
+                    Logger::Log(id, " landing token expired. It will try again.");
+                }
 
-        if (!takeOffSuccessful)
-        {
-          Logger::Log(id, " take-off token expired. It will try again.\n");
-        }
-      }
+            }
 
-      Logger::Log(id + " has successfully departed.");
+            landingOpTimer->join(); // wait until landing procedure complete
 
-    }));
-  }
+            Logger::Log(id + " has successfully landed.");
 
-  for (auto aircraft : aircrafts) {
-    aircraft->join();
-  }
+            // Sleep for at least the time of landing operation plus some random time
+            this_thread::sleep_for(seconds{ seconds{kOperationDurationSec + RandomInt()} });
 
-  Logger::Log("All done. Simulation terminating.");
+            Logger::Log(id, " is attempting a take-off.");
 
-  return 0;
+            bool takeOffSuccessful = false;
+
+            unique_ptr<RequestToken> takeOffRequestToken;
+            unique_ptr<std::thread> takeOffOpTimer;
+
+            while (!takeOffSuccessful)
+            {
+                // AIRCRAFT IS IN PARKING STAND, NOT IN RUNWAY
+
+                do
+                {
+                    takeOffRequestToken = airport.requestTakeOff(id);
+                } while (!takeOffRequestToken);
+
+                Logger::Log(id, " - found RW: ", takeOffRequestToken->runwayID, "& found parking stand: ", takeOffRequestToken->parkingStandID);
+
+                Logger::Log(id, " received a take-off token.");
+
+                // Wait some random time. In some cases the token will expire, that's OK.
+                this_thread::sleep_for(seconds{ RandomInt(2 * kTokenExpirationTimeSec) });
+
+                // put parkingStandID from the landingRequestToken into the TakeOffRequest token so the timer inside PerformTakeOff
+                // can use it for its timer
+                Logger::Log(id, " - exp time before setting pStand id: ", takeOffRequestToken->expirationTime);
+                takeOffRequestToken->parkingStandID = landingRequestToken->parkingStandID;
+                Logger::Log(id, " - exp time after: ", takeOffRequestToken->expirationTime);
+
+                takeOffOpTimer = airport.performTakeOff(*takeOffRequestToken);
+
+                if (takeOffOpTimer)
+                {
+                    Logger::Log(id, " had a non-null takeOffTimer thread");
+
+                    takeOffSuccessful = true;
+                    break;
+                }
+
+                if (!takeOffSuccessful)
+                {
+                    //Logger::Log(id, " take-off token expired. It will try again.\n");
+                }
+            }
+
+            takeOffOpTimer->join();
+
+            Logger::Log(id + " has successfully departed.");
+        }));
+    }
+
+    for (auto& aircraft : aircrafts) {
+        aircraft->join();
+    }
+
+    Logger::Log("All done. Simulation terminating.");
+
+    return 0;
 }
